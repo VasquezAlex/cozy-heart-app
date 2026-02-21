@@ -7,18 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
-const THEME = {
-  bg: "bg-gradient-to-br from-[#F4B942] via-[#E8A838] to-[#C4622B]",
-  card: "bg-[#F5E6D3]/95",
-  text: "text-[#3E2723]",
-  textSecondary: "text-[#6B4423]",
-  accent: "bg-[#FF7F6B]",
-  primary: "bg-[#C4622B]",
-  primaryHover: "hover:bg-[#A0522D]",
-  border: "border-[#D4754E]/40",
-  glow: "from-[#FFB347]/40"
-}
-
 export default function VerifyPage() {
   const { status } = useSession()
   const [message, setMessage] = useState("Connecting...")
@@ -79,27 +67,57 @@ export default function VerifyPage() {
   const isError = message.includes("Failed") || message.includes("Error")
 
   return (
-    <div className={`min-h-screen flex items-center justify-center p-4 relative overflow-hidden ${THEME.bg}`}>
+    <div 
+      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      style={{ background: "linear-gradient(135deg, #F4B942 0%, #E8A838 50%, #C4622B 100%)" }}
+    >
       {/* Ambient glow */}
-      <div className={`absolute inset-0 pointer-events-none bg-radial-gradient ${THEME.glow} to-transparent`} />
+      <div 
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: "radial-gradient(circle at 50% 50%, rgba(255, 179, 71, 0.4) 0%, transparent 70%)" }}
+      />
       
       {/* Floating hearts */}
       <Heart className="absolute top-10 left-10 w-8 h-8 opacity-20 animate-pulse text-[#FF7F6B] fill-[#FF7F6B]" />
       <Heart className="absolute bottom-20 right-10 w-12 h-12 opacity-20 animate-pulse delay-700 text-[#FF7F6B] fill-[#FF7F6B]" />
 
       {/* Main Card */}
-      <Card className={`w-full max-w-md ${THEME.card} backdrop-blur-sm border-2 ${THEME.border} shadow-2xl`}>
+      <Card 
+        className="w-full max-w-md backdrop-blur-sm border-2 shadow-2xl"
+        style={{ 
+          backgroundColor: "rgba(245, 230, 211, 0.95)", 
+          borderColor: "rgba(196, 98, 43, 0.4)" 
+        }}
+      >
         {/* Top gradient bar */}
-        <div className="h-2 w-full bg-linear-to-r from-[#C4622B] via-[#FF7F6B] to-[#C4622B] rounded-t-lg" />
+        <div 
+          className="h-2 w-full rounded-t-lg" 
+          style={{ background: "linear-gradient(to right, #C4622B, #FF7F6B, #C4622B)" }}
+        />
         
         <CardHeader className="text-center pb-2">
           {/* Logo */}
           <div className="relative mx-auto w-24 h-24 mb-4">
-            <div className="absolute inset-0 rounded-full bg-[#FFB347] animate-pulse opacity-30" />
-            <div className="relative w-full h-full rounded-full flex items-center justify-center shadow-lg border-4 border-[#F5E6D3] bg-linear-to-br from-[#F4B942] to-[#FF7F6B]">
-              <Heart className={`w-12 h-12 text-[#3E2723] fill-[#FFF8E7] ${isLoading ? "animate-bounce" : ""}`} />
+            <div 
+              className="absolute inset-0 rounded-full animate-pulse opacity-30" 
+              style={{ backgroundColor: "#FFB347" }}
+            />
+            <div 
+              className="relative w-full h-full rounded-full flex items-center justify-center shadow-lg border-4"
+              style={{ 
+                background: "linear-gradient(135deg, #F4B942, #FF7F6B)",
+                borderColor: "#F5E6D3"
+              }}
+            >
+              <Heart 
+                className={`w-12 h-12 ${isLoading ? "animate-bounce" : ""}`} 
+                style={{ color: "#3E2723", fill: "#FFF8E7" }}
+              />
               {isLoading && (
-                <Badge className="absolute -bottom-1 -right-1 bg-[#C4622B] text-[#FFF8E7] border-0">
+                <Badge 
+                  className="absolute -bottom-1 -right-1 border-0 text-xs font-bold"
+                  style={{ backgroundColor: "#C4622B", color: "#FFF8E7" }}
+                >
                   <Shield className="w-3 h-3 mr-1" />
                   BOT
                 </Badge>
@@ -107,32 +125,38 @@ export default function VerifyPage() {
             </div>
           </div>
           
-          <CardTitle className={`text-2xl ${THEME.text}`}>Cozy Heart</CardTitle>
-          <CardDescription className={`text-lg font-semibold ${THEME.textSecondary}`}>
+          <CardTitle className="text-2xl" style={{ color: "#3E2723" }}>Cozy Heart</CardTitle>
+          <CardDescription className="text-lg font-semibold" style={{ color: "#6B4423" }}>
             {message}
           </CardDescription>
           {subMessage && (
-            <p className={`text-sm ${THEME.textSecondary} opacity-80`}>{subMessage}</p>
+            <p className="text-sm opacity-80" style={{ color: "#6B4423" }}>{subMessage}</p>
           )}
         </CardHeader>
 
         <CardContent className="flex flex-col items-center gap-4 pb-6">
           {/* Status Icon */}
           {isSuccess ? (
-            <div className="w-14 h-14 rounded-full flex items-center justify-center bg-[#FFB347]/30 border-2 border-[#FFB347]">
-              <CheckCircle2 className="w-7 h-7 text-[#C4622B]" />
+            <div 
+              className="w-14 h-14 rounded-full flex items-center justify-center border-2"
+              style={{ backgroundColor: "rgba(255, 179, 71, 0.3)", borderColor: "#FFB347" }}
+            >
+              <CheckCircle2 className="w-7 h-7" style={{ color: "#C4622B" }} />
             </div>
           ) : isError ? (
-            <div className="w-14 h-14 rounded-full flex items-center justify-center bg-[#FF7F6B]/20 border-2 border-[#FF7F6B]">
-              <AlertCircle className="w-7 h-7 text-[#C4622B]" />
+            <div 
+              className="w-14 h-14 rounded-full flex items-center justify-center border-2"
+              style={{ backgroundColor: "rgba(255, 127, 107, 0.2)", borderColor: "#FF7F6B" }}
+            >
+              <AlertCircle className="w-7 h-7" style={{ color: "#C4622B" }} />
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2">
-              <Loader2 className="w-6 h-6 animate-spin text-[#C4622B]" />
+              <Loader2 className="w-6 h-6 animate-spin" style={{ color: "#C4622B" }} />
               <div className="flex gap-1">
-                <span className="w-2 h-2 bg-[#C4622B] rounded-full animate-bounce" />
-                <span className="w-2 h-2 bg-[#C4622B] rounded-full animate-bounce delay-150" />
-                <span className="w-2 h-2 bg-[#C4622B] rounded-full animate-bounce delay-300" />
+                <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: "#C4622B" }} />
+                <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: "#C4622B", animationDelay: "150ms" }} />
+                <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: "#C4622B", animationDelay: "300ms" }} />
               </div>
             </div>
           )}
@@ -141,7 +165,8 @@ export default function VerifyPage() {
           {isError && (
             <Button 
               onClick={() => window.location.reload()}
-              className={`${THEME.primary} ${THEME.primaryHover} text-[#FFF8E7]`}
+              className="text-[#FFF8E7] hover:opacity-90 transition-opacity"
+              style={{ background: "linear-gradient(to right, #C4622B, #FF7F6B)" }}
             >
               <RefreshCw className="w-4 h-4 mr-2" />
               Retry
@@ -149,13 +174,17 @@ export default function VerifyPage() {
           )}
 
           {isSuccess && (
-            <Badge variant="secondary" className="bg-[#FFB347]/40 text-[#A0522D] hover:bg-[#FFB347]/50">
+            <Badge 
+              variant="secondary" 
+              className="hover:bg-[#FFB347]/50"
+              style={{ backgroundColor: "rgba(255, 179, 71, 0.4)", color: "#A0522D" }}
+            >
               <CheckCircle2 className="w-4 h-4 mr-1" />
               Done
             </Badge>
           )}
 
-          <p className={`text-xs opacity-60 ${THEME.textSecondary}`}>Protected by Cozy Ward</p>
+          <p className="text-xs opacity-60" style={{ color: "#6B4423" }}>Protected by Cozy Ward</p>
         </CardContent>
       </Card>
     </div>

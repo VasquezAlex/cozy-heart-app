@@ -1,0 +1,156 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("UserID")
+  type              String  @map("Type")
+  provider          String  @map("Provider")
+  providerAccountId String  @map("ProviderAccountID")
+  refresh_token     String? @db.Text @map("RefreshToken")
+  access_token      String? @db.Text @map("AccessToken")
+  expires_at        Int?    @map("ExpiresAt")
+  token_type        String? @map("TokenType")
+  scope             String? @map("Scope")
+  id_token          String? @db.Text @map("IDToken")
+  session_state     String? @map("SessionState")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([provider, providerAccountId])
+  @@map("Account")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("SessionToken")
+  userId       String   @map("UserID")
+  expires      DateTime @map("Expires")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("Session")
+}
+
+model User {
+  id            String   @id @default(uuid()) @map("ID")
+  UserID        String?  @unique @map("UserID")
+  Username      String?  @map("Username")
+  TrustLevel    String   @default("NEW") @map("TrustLevel")
+  CreatedAt     DateTime @default(now()) @map("CreatedAt")
+  LastActive    DateTime? @map("LastActive")
+  
+  // NextAuth required fields
+  name          String?  @map("Name")
+  email         String?  @unique @map("Email")
+  emailVerified DateTime? @map("EmailVerified")
+  image         String?  @map("Image")
+  
+  MetaDatas     MetaData[]
+  Bans          Ban[]
+  Accounts      Account[]
+  Sessions      Session[]
+  
+  @@map("User")
+}
+
+model IPAddress {
+  ID          String   @id @default(uuid()) @map("ID")
+  IPHash      String   @unique @map("IPHash")
+  Details     Json?    @map("Details")
+  MetaDatas   MetaData[]
+  
+  @@index([IPHash])
+  @@map("IPAddress")
+}
+
+model DeviceFingerprint {
+  ID          String   @id @default(uuid()) @map("ID")
+  Fingerprint String   @unique @map("Fingerprint")
+  Details     Json?    @map("Details")
+  MetaDatas   MetaData[]
+  
+  @@index([Fingerprint])
+  @@map("DeviceFingerprint")
+}
+
+model MetaData {
+  ID                  String            @id @default(uuid()) @map("ID")
+  UserID              String            @map("UserID")
+  IPID                String            @map("IPID")
+  DeviceID            String            @map("DeviceID")
+  
+  User                User              @relation(fields: [UserID], references: [id], onDelete: Cascade)
+  IPAddress           IPAddress         @relation(fields: [IPID], references: [ID], onDelete: Cascade)
+  DeviceFingerprint   DeviceFingerprint @relation(fields: [DeviceID], references: [ID], onDelete: Cascade)
+  
+  SessionToken        String?           @unique @map("SessionToken")
+  UserAgent           String?           @map("UserAgent")
+  GeoLocation         Json?             @map("GeoLocation")
+  TrustScore          Float             @default(0.5) @map("TrustScore")
+  RiskFlags           String[]          @map("RiskFlags")
+  IsBlocked           Boolean           @default(false) @map("IsBlocked")
+  BlockReason         String?           @map("BlockReason")
+  VerificationStatus  String            @default("PENDING") @map("VerificationStatus")
+  FirstSeenAt         DateTime          @default(now()) @map("FirstSeenAt")
+  LastSeenAt          DateTime          @updatedAt @map("LastSeenAt")
+  ExpiresAt           DateTime?         @map("ExpiresAt")
+  Headers             Json?             @map("Headers")
+  ExtraData           Json?             @map("ExtraData")
+  
+  @@index([UserID, LastSeenAt])
+  @@index([IPID, LastSeenAt])
+  @@index([DeviceID, LastSeenAt])
+  @@index([UserID, IPID, DeviceID])
+  @@index([TrustScore])
+  @@index([IsBlocked])
+  @@index([RiskFlags])
+  @@index([SessionToken])
+  @@index([FirstSeenAt])
+  @@unique([UserID, IPID, DeviceID, FirstSeenAt], name: "unique_session_snapshot")
+  @@map("MetaData")
+}
+
+model Ban {
+  ID          String   @id @default(uuid()) @map("ID")
+  TargetType  String   @map("TargetType")
+  TargetID    String   @map("TargetID")
+  Reason      String?  @map("Reason")
+  CreatedAt   DateTime @default(now()) @map("CreatedAt")
+  ExpiresAt   DateTime? @map("ExpiresAt")
+  RevokedAt   DateTime? @map("RevokedAt")
+  RevokedBy   String?   @map("RevokedBy")
+  BannedBy    String?   @map("BannedBy")
+  Details     Json?     @map("Details")
+  User        User?     @relation(fields: [UserID], references: [id], onDelete: Cascade)
+  UserID      String?   @map("UserID")
+  
+  @@index([TargetType, TargetID])
+  @@index([TargetType, TargetID, CreatedAt])
+  @@index([RevokedAt])
+  @@map("Ban")
+}
+
+// Required by NextAuth
+model VerificationToken {
+  identifier String   @map("Identifier")
+  token      String   @unique @map("Token")
+  expires    DateTime @map("Expires")
+  
+  @@unique([identifier, token])
+  @@map("VerificationToken")
+}

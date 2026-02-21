@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-  ],
+, "packages/bot/index.js", "packages/bot/setup/registerCommands.js", "packages/bot/setup/registerEvents.js", "packages/bot/events/messageCreate.js", "packages/bot/events/interactionCreate.js", "packages/bot/commands/prefix/ban.js"  ],
   "exclude": ["node_modules"]
 }
