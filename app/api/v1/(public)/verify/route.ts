@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
-import { headers } from "next/headers"
+import { cookies } from "next/headers"
 import prisma from "@/database/index"
-import { authenticate, deny } from "@/lib/helpers/api-auth";
 import { hashIPData, hashDeviceData } from "@/packages/crypto"
 import { REST } from "@discordjs/rest"
 import { Routes } from "discord-api-types/v10"
@@ -9,25 +8,45 @@ import { Routes } from "discord-api-types/v10"
 const discord = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN!)
 
 export async function POST(req: Request) {
-  let auth;
-  
   try {
-    // API Authentication (replaces session cookies)
-    auth = authenticate(req)
+    // Session-based auth (browser cookie)
+    const cookieStore = await cookies()
+    const sessionToken = cookieStore.get("authjs.session-token")?.value || 
+                         cookieStore.get("next-auth.session-token")?.value
     
-    const headersList = await headers()
-    const ip = headersList.get("x-forwarded-for")?.split(",")[0] ?? "unknown"
+    if (!sessionToken) {
+      return NextResponse.json({ error: "Not signed in" }, { status: 401 })
+    }
     
-    // UserID now comes from body (bot sends it)
-    const { UserID, DeviceData } = await req.json()
+    const session = await prisma.session.findFirst({
+      where: {
+        sessionToken: sessionToken,
+        expires: { gt: new Date() }
+      },
+      include: { user: true }
+    })
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: "Session expired" }, { status: 401 })
+    }
+
+    // Get UserID from session (not from body for security)
+    const UserID = session.user.UserID
     
     if (!UserID) {
-      return NextResponse.json({ error: "UserID required" }, { status: 400 })
+      return NextResponse.json({ error: "UserID not linked" }, { status: 400 })
     }
+
+    const body = await req.json()
+    const { DeviceData } = body
     
     if (!DeviceData) {
       return NextResponse.json({ error: "Missing device data" }, { status: 400 })
     }
+
+    // Get IP from headers
+    const forwardedFor = req.headers.get("x-forwarded-for")
+    const ip = forwardedFor?.split(",")[0] ?? "unknown"
 
     const ipHash = hashIPData(ip)
     const deviceFP = hashDeviceData(Array.isArray(DeviceData) ? DeviceData.join("|") : DeviceData)
@@ -86,7 +105,6 @@ export async function POST(req: Request) {
       
       return NextResponse.json({ 
         success: true, 
-        requestId: auth.requestId,
         alreadyVerified: true,
         roleGranted: roleResult.success,
         roleError: roleResult.error,
@@ -160,7 +178,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ 
       success: true,
-      requestId: auth.requestId,
       roleGranted: roleResult.success,
       roleError: roleResult.error,
       warning: sharedDeviceMeta ? "Device previously used by another account" : undefined,
@@ -169,18 +186,9 @@ export async function POST(req: Request) {
         : `Verified but role failed: ${roleResult.error}. Contact a mod.`
     })
     
-  } catch (error: unknown) {
-    // Handle auth errors specifically
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    if (['IP not allowed', 'Too many requests', 'Request too old', 'Wrong API key', 'Invalid signature'].includes(errorMessage)) {
-      return deny(errorMessage, auth?.requestId)
-    }
-    
+  } catch (error) {
     console.error("Verification error:", error)
-    return NextResponse.json({ 
-      error: "Internal server error",
-      requestId: auth?.requestId 
-    }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
