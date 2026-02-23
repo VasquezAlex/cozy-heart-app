@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import { signIn, useSession } from "next-auth/react"
-import { Heart, Shield, CheckCircle2, Lock, ChevronDown, Sparkles } from "lucide-react"
+import { Heart, Shield, CheckCircle2, Lock, ChevronDown, Sparkles, AlertTriangle, Fingerprint, Wifi } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,54 +10,99 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+// Import from our modular API
+import { api as APIClient } from "@/lib/api/server"
+import { VerifyResponse, VerifyStatusResponse } from "@/lib/api/types"
+
+interface ConsentState {
+  device: boolean
+  ip: boolean
+}
 
 export default function VerifyPage() {
   const { status, data: session } = useSession()
   const [step, setStep] = useState<"loading" | "consent" | "verifying" | "complete" | "error">("loading")
   const [isOpen, setIsOpen] = useState(false)
-  const [agreed, setAgreed] = useState(false)
+  const [consents, setConsents] = useState<ConsentState>({
+    device: false,
+    ip: false
+  })
+  const [errorMessage, setErrorMessage] = useState("Something went wrong")
+  const [isRetrying, setIsRetrying] = useState(false)
+  
   const verified = useRef(false)
   const initialized = useRef(false)
+
+  const canVerify = consents.device && consents.ip  
 
   const verify = useCallback(async () => {
     if (verified.current) return
     verified.current = true
+    setIsRetrying(false)
     
     try {
       const canvas = document.createElement("canvas")
       const ctx = canvas.getContext("2d")
-      ctx?.fillText("Cozy Heart", 0, 0)
+      if (ctx) {
+        ctx.fillText("Cozy Heart", 0, 0)
+      }
       
       const UserID = (session?.user as { userId?: string })?.userId
       
-      const res = await fetch("/api/v1/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          UserID: UserID,
-          DeviceData: [
-            canvas.toDataURL(),
-            navigator.hardwareConcurrency,
-            navigator.language,
-            screen.width,
-            new Date().getTimezoneOffset()
-          ],
-          Consent: { agreed: true, timestamp: new Date().toISOString() }
-        }),
+      if (!UserID) {
+        setErrorMessage("User ID not found. Please re-login.")
+        setStep("error")
+        return
+      }
+      
+      // Use APIClient instead of raw fetch
+      const data = await APIClient<VerifyResponse>("POST", "/api/v1/verify", {
+        UserID,
+        DeviceData: {
+          canvas: canvas.toDataURL(),
+          cores: navigator.hardwareConcurrency,
+          language: navigator.language,
+          screen: screen.width,
+          timezone: new Date().getTimezoneOffset()
+        },
+        Consent: {
+          device: consents.device,
+          ip: consents.ip,
+          timestamp: new Date().toISOString()
+        }
       })
-
-      const data = await res.json()
-      setStep(data.success ? "complete" : "error")
-      if (data.success) setTimeout(() => window.close(), 2000)
-    } catch {
+      
+      if (!data.success) {
+        setErrorMessage(data.error || "Verification failed")
+        setStep("error")
+        return
+      }
+      
+      setStep("complete")
+      setTimeout(() => window.close(), 2000)
+    } catch (err) {
+      console.error("Verification error:", err)
+      setErrorMessage(err instanceof Error ? err.message : "Network error. Check your connection or try disabling VPN.")
       setStep("error")
     }
-  }, [session])
+  }, [session, consents])
 
   useEffect(() => {
     if (!initialized.current && status === "authenticated" && step === "loading") {
       initialized.current = true
-      queueMicrotask(() => setStep("consent"))
+      
+      // Use APIClient for the status check
+      APIClient<VerifyStatusResponse>("GET", "/api/v1/verify/status")
+        .then((data) => {
+          if (data.verified) {
+            setStep("complete")
+            setTimeout(() => window.close(), 1500)
+          } else {
+            queueMicrotask(() => setStep("consent"))
+          }
+        })
+        .catch(() => queueMicrotask(() => setStep("consent")))
     }
   }, [status, step])
 
@@ -67,10 +112,22 @@ export default function VerifyPage() {
     }
   }, [status])
 
+  const handleRetry = () => {
+    verified.current = false
+    setStep("consent")
+    setErrorMessage("")
+    setIsRetrying(true)
+    setConsents({ device: false, ip: false })
+  }
+
+  const toggleConsent = (key: keyof ConsentState) => {
+    setConsents(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 overflow-hidden bg-linear-to-br from-rose-400 via-pink-500 to-violet-600">
       <div className="absolute inset-0 bg-linear-to-t from-black/30 via-transparent to-black/10" />
-      <div className="absolute top-0 left-0 w-125 h-12h-125-300/30 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+      <div className="absolute top-0 left-0 w-125 h-125 bg-rose-300/30 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 animate-pulse" />
       <div className="absolute bottom-0 right-0 w-150 h-150 bg-violet-400/30 rounded-full blur-3xl translate-x-1/3 translate-y-1/3" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-200 h-200 bg-pink-300/20 rounded-full blur-3xl" />
 
@@ -122,14 +179,28 @@ export default function VerifyPage() {
               <motion.div className="relative" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <motion.div 
                   className="w-24 h-24 rounded-3xl bg-linear-to-br from-rose-400 to-violet-500 flex items-center justify-center shadow-lg shadow-rose-500/30 border-2 border-white/30 relative overflow-hidden"
-                  animate={{ boxShadow: ["0 0 30px -5px rgba(244, 63, 94, 0.4)", "0 0 50px -5px rgba(139, 92, 246, 0.4)", "0 0 30px -5px rgba(244, 63, 94, 0.4)"] }}
+                  animate={{ 
+                    boxShadow: [
+                      "0 0 30px -5px rgba(244, 63, 94, 0.4)",
+                      "0 0 50px -5px rgba(139, 92, 246, 0.4)",
+                      "0 0 30px -5px rgba(244, 63, 94, 0.4)"
+                    ]
+                  }}
                   transition={{ duration: 3, repeat: Infinity }}
                 >
-                  <motion.div className="absolute inset-0 bg-linear-to-tr from-transparent via-white/30 to-transparent" animate={{ x: ["-100%", "100%"] }} transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }} />
+                  <motion.div 
+                    className="absolute inset-0 bg-linear-to-tr from-transparent via-white/30 to-transparent" 
+                    animate={{ x: ["-100%", "100%"] }} 
+                    transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }} 
+                  />
                   <AnimatePresence mode="wait">
                     {step === "complete" ? (
-                      <motion.div key="check" initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0, rotate: 180 }} transition={{ type: "spring", stiffness: 200 }}>
+                      <motion.div key="check" initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ type: "spring", stiffness: 200 }}>
                         <CheckCircle2 className="w-12 h-12 text-white" strokeWidth={2.5} />
+                      </motion.div>
+                    ) : step === "error" ? (
+                      <motion.div key="error" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ type: "spring", stiffness: 200 }}>
+                        <AlertTriangle className="w-12 h-12 text-white" />
                       </motion.div>
                     ) : (
                       <motion.div key="heart" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ type: "spring", stiffness: 200 }}>
@@ -138,7 +209,11 @@ export default function VerifyPage() {
                     )}
                   </AnimatePresence>
                 </motion.div>
-                <motion.div className="absolute -inset-4 rounded-full border border-white/10" animate={{ rotate: 360 }} transition={{ duration: 10, repeat: Infinity, ease: "linear" }}>
+                <motion.div 
+                  className="absolute -inset-4 rounded-full border border-white/10" 
+                  animate={{ rotate: 360 }} 
+                  transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                >
                   <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-rose-300 rounded-full shadow-lg shadow-rose-400/50" />
                 </motion.div>
               </motion.div>
@@ -149,13 +224,13 @@ export default function VerifyPage() {
                 {step === "consent" && "Welcome to Cozy Heart"}
                 {step === "verifying" && "Securing..."}
                 {step === "complete" && "You're in! 💜"}
-                {step === "error" && "Hmm, something's off"}
+                {step === "error" && "Verification Failed"}
               </motion.h1>
               <motion.p className="text-sm text-rose-100/90" key={step + "sub"} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-                {step === "consent" && "One quick step to keep our community genuine"}
-                {step === "verifying" && "Just a moment while we set things up..."}
+                {step === "consent" && "Help us keep our community safe & genuine"}
+                {step === "verifying" && "Checking your device..."}
                 {step === "complete" && "Get ready to make meaningful connections"}
-                {step === "error" && "Let's try that again"}
+                {step === "error" && "We couldn't complete your verification"}
               </motion.p>
             </div>
 
@@ -163,41 +238,61 @@ export default function VerifyPage() {
 
             <AnimatePresence mode="wait">
               {step === "consent" && (
-                <motion.div key="consent" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-5">
+                <motion.div key="consent" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4">
                   
-                  {/* Modern Checkbox - Friendly but legally sound */}
+                  {/* Device Check - Required */}
                   <motion.div 
-                    className={`flex items-start gap-3 p-4 rounded-2xl border-2 transition-all duration-300 cursor-pointer ${agreed ? 'bg-white/10 border-rose-400/50' : 'bg-black/20 border-white/10 hover:border-white/30'}`}
-                    onClick={() => setAgreed(!agreed)}
-                    whileTap={{ scale: 0.99 }}
+                    onClick={() => toggleConsent('device')}
+                    className={`p-4 rounded-2xl border-2 cursor-pointer flex items-start gap-3 transition-all ${consents.device ? 'bg-white/10 border-rose-400 shadow-lg shadow-rose-500/20' : 'bg-black/20 border-white/10 hover:border-white/30'}`}
+                    whileTap={{ scale: 0.98 }}
                   >
                     <Checkbox 
-                      id="verify-consent" 
-                      checked={agreed}
-                      onCheckedChange={(checked) => setAgreed(checked as boolean)}
-                      className="mt-0.5 data-[state=checked]:bg-rose-400 data-[state=checked]:border-rose-400 border-white/30"
+                      id="device-check"
+                      checked={consents.device}
+                      onCheckedChange={() => toggleConsent('device')}
+                      className="mt-1 data-[state=checked]:bg-rose-400 data-[state=checked]:border-rose-400 border-white/40"
                     />
-                    <div className="space-y-1 leading-none">
-                      <Label 
-                        htmlFor="verify-consent" 
-                        className="text-sm font-medium text-white cursor-pointer"
-                      >
-                        I agree to keep Cozy Heart safe
+                    <div className="space-y-1">
+                      <Label htmlFor="device-check" className="text-white font-semibold cursor-pointer flex items-center gap-2">
+                        <Fingerprint className="w-4 h-4 text-rose-300" />
+                        Verify my device *
                       </Label>
-                      <p className="text-xs text-rose-200/70">
-                        I understand this verifies my device to prevent fake accounts.{' '}
-                        <a href="/privacy" className="underline hover:text-rose-300 transition-colors">Privacy Policy</a>
+                      <p className="text-xs text-rose-200/70 leading-relaxed">
+                        I consent to browser fingerprinting to detect fake accounts & catfish
                       </p>
                     </div>
                   </motion.div>
 
-                  {/* Collapsible Info */}
+                  {/* IP Check - Required */}
+                  <motion.div 
+                    onClick={() => toggleConsent('ip')}
+                    className={`p-4 rounded-2xl border-2 cursor-pointer flex items-start gap-3 transition-all ${consents.ip ? 'bg-white/10 border-rose-400 shadow-lg shadow-rose-500/20' : 'bg-black/20 border-white/10 hover:border-white/30'}`}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Checkbox 
+                      id="ip-check"
+                      checked={consents.ip}
+                      onCheckedChange={() => toggleConsent('ip')}
+                      className="mt-1 data-[state=checked]:bg-rose-400 data-[state=checked]:border-rose-400 border-white/40"
+                    />
+                    <div className="space-y-1">
+                      <Label htmlFor="ip-check" className="text-white font-semibold cursor-pointer flex items-center gap-2">
+                        <Wifi className="w-4 h-4 text-rose-300" />
+                        Check my connection *
+                      </Label>
+                      <p className="text-xs text-rose-200/70 leading-relaxed">
+                        I consent to IP security checks to prevent ban evasion
+                      </p>
+                    </div>
+                  </motion.div>
+
+                  {/* Info Toggle */}
                   <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
                     <CollapsibleTrigger asChild>
                       <Button variant="ghost" className="w-full flex items-center justify-between text-xs text-rose-100/80 hover:text-white hover:bg-white/10 rounded-xl h-auto py-3 px-4">
                         <span className="flex items-center gap-2">
                           <Shield className="w-4 h-4" />
-                          Why do we verify?
+                          Why do we need this?
                         </span>
                         <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
                           <ChevronDown className="w-4 h-4" />
@@ -206,30 +301,29 @@ export default function VerifyPage() {
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <div className="mt-2 bg-black/20 rounded-xl p-4 text-xs text-rose-100/80 leading-relaxed border border-white/5">
-                        We check your device to prevent fake accounts and keep our community safe. 
-                        Your data is encrypted and automatically deleted after 90 days.
+                        We verify your device fingerprint and IP to stop banned users and catfish from returning. 
+                        All data is encrypted and auto-deletes after 90 days. 
+                        <a href="/privacy" className="underline hover:text-rose-300 ml-1 transition-colors">Read our Privacy Policy</a>
                       </div>
                     </CollapsibleContent>
                   </Collapsible>
 
-                  {/* Button - Disabled until checked */}
-                  <motion.div whileHover={agreed ? { scale: 1.02 } : {}} whileTap={agreed ? { scale: 0.98 } : {}}>
+                  {/* Main Button */}
+                  <motion.div whileHover={canVerify ? { scale: 1.02 } : {}} whileTap={canVerify ? { scale: 0.98 } : {}}>
                     <Button
                       onClick={() => {setStep("verifying"); verify()}}
-                      disabled={!agreed}
-                      className={`w-full h-12 font-semibold text-base rounded-xl shadow-lg transition-all duration-300 relative overflow-hidden group ${agreed ? 'bg-linear-to-r from-rose-400 to-violet-500 hover:from-rose-500 hover:to-violet-600 text-white shadow-rose-500/25' : 'bg-white/5 text-white/40 cursor-not-allowed border border-white/10'}`}
+                      disabled={!canVerify}
+                      className={`w-full h-12 font-bold text-base rounded-xl shadow-lg transition-all relative overflow-hidden group ${canVerify ? 'bg-white text-rose-600 hover:bg-rose-50 shadow-white/25' : 'bg-white/10 text-white/40 cursor-not-allowed border border-white/10'}`}
                     >
                       <span className="relative z-10 flex items-center justify-center gap-2">
-                        {agreed ? "Complete Verification" : "Please agree to continue"}
-                        {agreed && <motion.span animate={{ x: [0, 4, 0] }} transition={{ repeat: Infinity, duration: 1.5 }}>→</motion.span>}
+                        {canVerify ? "Verify & Join" : "Please agree above to continue"}
+                        {canVerify && <motion.span animate={{ x: [0, 4, 0] }} transition={{ repeat: Infinity, duration: 1.5 }}>→</motion.span>}
                       </span>
-                      {agreed && <div className="absolute inset-0 bg-linear-to-r from-violet-500 to-rose-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />}
                     </Button>
                   </motion.div>
 
-                  {/* Microcopy */}
-                  <p className="text-[10px] text-rose-200/50 text-center">
-                    Your consent is recorded for security purposes
+                  <p className="text-[10px] text-rose-200/40 text-center">
+                    * Required for security • Your consent is recorded and timestamped
                   </p>
                 </motion.div>
               )}
@@ -237,55 +331,95 @@ export default function VerifyPage() {
               {step === "verifying" && (
                 <motion.div key="verifying" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="flex flex-col items-center py-8 space-y-6">
                   <div className="relative">
-                    <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }} className="w-16 h-16 rounded-full border-2 border-rose-300/30 border-t-rose-400 border-r-violet-400" />
-                    <motion.div animate={{ rotate: -360 }} transition={{ duration: 3, repeat: Infinity, ease: "linear" }} className="absolute inset-2 rounded-full border-2 border-violet-300/30 border-t-violet-400 border-r-rose-400" />
+                    <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }} className="w-16 h-16 rounded-full border-4 border-rose-300/30 border-t-rose-400 border-r-violet-400" />
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <Lock className="w-5 h-5 text-white" />
+                      <Lock className="w-6 h-6 text-white" />
                     </div>
                   </div>
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-2">
                     {[0, 1, 2].map((i) => (
-                      <motion.div key={i} className="w-2 h-2 rounded-full bg-rose-300" animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }} />
+                      <motion.div 
+                        key={i} 
+                        className="w-2.5 h-2.5 rounded-full bg-rose-300" 
+                        animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }} 
+                        transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }} 
+                      />
                     ))}
                   </div>
-                  <p className="text-xs text-rose-100/70">Establishing secure connection...</p>
+                  <div className="text-center space-y-1">
+                    <p className="text-sm text-rose-100/90 font-medium">Verifying your device...</p>
+                    <p className="text-xs text-rose-200/60">This takes just a few seconds</p>
+                  </div>
                 </motion.div>
               )}
 
               {step === "complete" && (
-                <motion.div key="complete" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-6">
+                <motion.div key="complete" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-6 space-y-4">
                   <motion.div initial={{ scale: 0, y: 20 }} animate={{ scale: 1, y: 0 }} transition={{ type: "spring", stiffness: 200, damping: 15 }} className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-500/20 text-emerald-300 rounded-full text-sm font-medium border border-emerald-500/30 shadow-lg shadow-emerald-500/10">
                     <CheckCircle2 className="w-5 h-5" />
                     <span>Successfully Verified</span>
                   </motion.div>
-                  <motion.p className="mt-4 text-sm text-rose-100/80" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
-                    Redirecting you back to Discord...
+                  <motion.p className="text-sm text-rose-100/90" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+                    Welcome to Cozy Heart! 💜
+                  </motion.p>
+                  <motion.p className="text-xs text-rose-200/60" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+                    Redirecting you back...
                   </motion.p>
                 </motion.div>
               )}
 
               {step === "error" && (
-                <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-6 space-y-4">
-                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 200 }} className="w-16 h-16 mx-auto rounded-full bg-red-500/20 flex items-center justify-center border border-red-500/30">
-                    <span className="text-2xl">😅</span>
-                  </motion.div>
-                  <div className="space-y-1">
-                    <p className="text-white font-medium">Verification didn&apos;t complete</p>
-                    <p className="text-xs text-rose-200/70">This might be a network issue or browser setting</p>
+                <motion.div key="error" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
+                  
+                  <Alert className="bg-red-500/10 border-red-500/30 text-white backdrop-blur-sm">
+                    <AlertTriangle className="h-5 w-5 text-red-400" />
+                    <AlertTitle className="text-red-200 font-semibold mb-1">Verification Failed</AlertTitle>
+                    <AlertDescription className="text-red-100/80 text-sm leading-relaxed">
+                      {errorMessage}
+                    </AlertDescription>
+                  </Alert>
+
+                  <div className="space-y-3 pt-2">
+                    <p className="text-xs text-rose-200/60 text-center">
+                      Common issues: Browser privacy mode, VPNs, or incognito windows can block verification.
+                    </p>
+                    
+                    <div className="flex gap-3">
+                      <Button 
+                        onClick={handleRetry} 
+                        disabled={isRetrying}
+                        className="flex-1 bg-white text-rose-600 hover:bg-rose-50 font-semibold rounded-xl h-11"
+                      >
+                        {isRetrying ? "Retrying..." : "Try Again"}
+                      </Button>
+                      <Button 
+                        onClick={() => window.open('/support', '_blank')} 
+                        variant="outline" 
+                        className="flex-1 border-white/30 text-white hover:bg-white/10 rounded-xl h-11"
+                      >
+                        Get Help
+                      </Button>
+                    </div>
                   </div>
-                  <Button onClick={() => window.location.reload()} variant="outline" className="bg-white/5 border-white/20 text-white hover:bg-white/10 hover:text-white rounded-xl px-6">
-                    Try Again
-                  </Button>
+
+                  <button 
+                    onClick={() => window.location.reload()} 
+                    className="w-full text-xs text-rose-200/50 hover:text-rose-200 transition-colors py-2"
+                  >
+                    Reload page
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            <div className="pt-2 flex items-center justify-center gap-2 text-[10px] text-rose-200/50">
-              <Lock className="w-3 h-3" />
-              <span>End-to-end encrypted • GDPR Compliant</span>
+            <div className="pt-4 flex items-center justify-center gap-4 text-[10px] text-rose-200/40">
+              <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Encrypted</span>
+              <span className="flex items-center gap-1"><Shield className="w-3 h-3" /> GDPR Ready</span>
+              <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> ISO 27001</span>
             </div>
           </CardContent>
         </Card>
+        
         <div className="absolute -inset-1 bg-linear-to-r from-rose-400 to-violet-500 rounded-3xl blur opacity-20 -z-10 animate-pulse" />
       </motion.div>
     </div>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/database/index";
 import { Prisma } from "@prisma/client";
-import { authenticate, deny } from "@/lib/helpers/api-auth";
+import { authenticate, deny } from "@/lib/api/auth";
 
 // GET /api/v1/moderation/bans - List bans (protected)
 export async function GET(req: Request) {

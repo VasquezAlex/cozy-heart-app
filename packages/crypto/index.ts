@@ -1,8 +1,6 @@
 import crypto from 'crypto';
 
 const salt = process.env.SALT || 'default_salt_value';
-
-// Derive 32-byte key from salt (required for AES-256)
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(salt).digest();
 
 export function encryptIPData(ip: string): string {
@@ -22,20 +20,23 @@ export function decryptIPData(encrypted: string): string {
     return decrypted;
 }
 
-// Hashing functions (unchanged)
 export function hashIPData(ip: string): string {
     const clean = ip.startsWith('::ffff:') ? ip.substring(7) : ip;
     return crypto.createHmac('sha256', salt).update(clean).digest('hex');
 }
 
-export function hashDeviceData(deviceData: string): string {
-    return crypto.createHmac('sha256', salt).update(deviceData).digest('hex');
+// FIXED: Handle objects by stringifying them
+export function hashDeviceData(deviceData: string | object): string {
+    const dataString = typeof deviceData === 'object' 
+        ? JSON.stringify(deviceData) 
+        : deviceData;
+    return crypto.createHmac('sha256', salt).update(dataString).digest('hex');
 }
 
 export function verifyIPData(ip: string, hashed: string): boolean {
     return hashIPData(ip) === hashed;
 }
 
-export function verifyDeviceData(deviceData: string, hashed: string): boolean {
+export function verifyDeviceData(deviceData: string | object, hashed: string): boolean {
     return hashDeviceData(deviceData) === hashed;
 }
