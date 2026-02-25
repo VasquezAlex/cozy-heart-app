@@ -18,18 +18,18 @@ import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Loading } from "@/components/ui/loading"
 import Link from "next/link"
 import Image from "next/image"
 import { redirect, useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
-import { AuroraBackground } from "@/components/background";
+import { AuroraBackground } from "@/components/background"
 
-interface SessionData {
+interface Session {
   user: {
     id: string
     name: string
@@ -141,7 +141,7 @@ const cardHoverVariants = {
     y: -4,
     transition: { type: "spring" as const, stiffness: 400, damping: 25 }
   }
-}
+} as const
 
 export default function HomePage() {
   const { data: session, status, update } = useSession()
@@ -155,29 +155,15 @@ export default function HomePage() {
   }, [])
 
   if (status === "loading") {
-    return (
-      <AuroraBackground>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="space-y-4 text-center">
-            <motion.div 
-              animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              <Heart className="w-16 h-16 text-rose-500 fill-rose-500/50 mx-auto" />
-            </motion.div>
-            <Skeleton className="h-4 w-32 bg-white/5 mx-auto" />
-          </div>
-        </div>
-      </AuroraBackground>
-    )
+    return <Loading />
   }
   
   if (!session) {
     redirect("/")
   }
 
-  const sessionData = session as unknown as SessionData
-  const { user, discord, profile, stats, can, preferences } = sessionData
+  const Session = session as unknown as Session
+  const { user, discord, profile, stats, can, preferences } = Session
   
   const completionSteps = [
     { label: "Add Photos", complete: profile.photos > 0, icon: Camera },
@@ -266,7 +252,7 @@ export default function HomePage() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
-  const unreadCount = (sessionData.notifications?.filter(n => !n.read).length || 0) + stats.messages + stats.matches
+  const unreadCount = (Session.notifications?.filter(n => !n.read).length || 0) + stats.messages + stats.matches
 
   return (
     <AuroraBackground>
@@ -325,8 +311,8 @@ export default function HomePage() {
                         )}
                       </DropdownMenuLabel>
                       <ScrollArea className="h-80">
-                        {sessionData.notifications?.length ? (
-                          sessionData.notifications.map((notif) => (
+                        {Session.notifications?.length ? (
+                          Session.notifications.map((notif) => (
                             <DropdownMenuItem 
                               key={notif.id} 
                               className="px-4 py-3 focus:bg-white/5 cursor-pointer border-b border-white/5 last:border-0"
@@ -601,7 +587,7 @@ export default function HomePage() {
                 ))}
               </motion.section>
 
-              {can.seek && sessionData.suggestedMatches && sessionData.suggestedMatches.length > 0 && (
+              {can.seek && Session.suggestedMatches && Session.suggestedMatches.length > 0 && (
                 <motion.section variants={itemVariants}>
                   <Card className="bg-zinc-950/50 border-white/8">
                     <CardHeader className="pb-4 border-b border-white/6">
@@ -622,7 +608,7 @@ export default function HomePage() {
                     </CardHeader>
                     <CardContent className="pt-6">
                       <div className="flex gap-4 overflow-x-auto pb-2 -mx-2 px-2 scrollbar-hide">
-                        {sessionData.suggestedMatches.map((match, idx) => (
+                        {Session.suggestedMatches.map((match, idx) => (
                           <motion.div
                             key={match.id}
                             initial={{ opacity: 0, x: 20 }}
@@ -850,7 +836,7 @@ export default function HomePage() {
                         <Activity className="w-4 h-4 text-rose-400" />
                         Recent Activity
                       </CardTitle>
-                      {sessionData.recentActivities && sessionData.recentActivities.length > 0 && (
+                      {Session.recentActivities && Session.recentActivities.length > 0 && (
                         <Button variant="ghost" size="sm" className="text-zinc-500 hover:text-white text-xs" asChild>
                           <Link href="/activity">View All</Link>
                         </Button>
@@ -858,9 +844,9 @@ export default function HomePage() {
                     </div>
                   </CardHeader>
                   <CardContent className="pt-4">
-                    {sessionData.recentActivities && sessionData.recentActivities.length > 0 ? (
+                    {Session.recentActivities && Session.recentActivities.length > 0 ? (
                       <div className="space-y-4">
-                        {sessionData.recentActivities.slice(0, 4).map((activity, idx) => (
+                        {Session.recentActivities.slice(0, 4).map((activity, idx) => (
                           <motion.div
                             key={activity.id}
                             initial={{ opacity: 0, x: -10 }}

@@ -30,7 +30,6 @@ export default function VerifyPage() {
   const [isOpen, setIsOpen] = useState(false)
   const [consents, setConsents] = useState<ConsentState>({ device: false, ip: false })
   const [errorMessage, setErrorMessage] = useState("Something went wrong")
-  const [isRetrying, setIsRetrying] = useState(false)
   
   const verified = useRef(false)
   const initialized = useRef(false)
@@ -40,8 +39,6 @@ export default function VerifyPage() {
   const verify = useCallback(async () => {
     if (verified.current) return
     verified.current = true
-    setIsRetrying(false)
-    
     try {
       const canvas = document.createElement("canvas")
       const ctx = canvas.getContext("2d")
@@ -109,7 +106,6 @@ export default function VerifyPage() {
     verified.current = false
     setStep("consent")
     setErrorMessage("")
-    setIsRetrying(true)
     setConsents({ device: false, ip: false })
   }
 
