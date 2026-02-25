@@ -3,9 +3,14 @@ import crypto from 'crypto';
 
 // Store: IP -> timestamps of requests
 const requests = new Map<string, number[]>();
+const MAX_STORED_IPS = 1000; // Prevent memory leak
 
 // === MAIN CHECK ===
 export function authenticate(req: Request) {
+  if (!req?.headers) {
+    throw new Error('Invalid request object - authenticate() only works in API routes');
+  }
+  
   const ip = getIP(req);
   
   if (isBlockedIP(ip)) throw new Error('IP not allowed');
@@ -19,6 +24,8 @@ export function authenticate(req: Request) {
 
 // === CHECKS ===
 function getIP(req: Request) {
+  // Safety check
+  if (!req.headers) return 'unknown';
   return req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
 }
 
@@ -35,6 +42,15 @@ function isRateLimited(ip: string) {
   
   recent.push(now);
   requests.set(ip, recent);
+  
+  // Cleanup old entries if too many IPs stored
+  if (requests.size > MAX_STORED_IPS) {
+    const firstKey = requests.keys().next().value;
+    if (firstKey) {
+      requests.delete(firstKey);
+    }
+  }
+  
   return false;
 }
 
