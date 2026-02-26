@@ -4,6 +4,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { getServerSession } from "next-auth";
 import { PrismaClient } from "@prisma/client";
 import type { NextAuthOptions } from "next-auth";
+import { getClient, isDiscordError } from "@/lib/discord/client"; // Added import
 
 const prisma = new PrismaClient();
 const GuildID = process.env.DISCORD_GUILD_ID as string;
@@ -83,7 +84,7 @@ export const AuthOptions: NextAuthOptions = {
       clientSecret: ClientSecret,
       authorization: {
         params: {
-          scope: "identify email guilds",
+          scope: "identify email", // Removed "guilds" - no longer needed with bot approach
           prompt: "consent",
         },
       },
@@ -101,8 +102,8 @@ export const AuthOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    async signIn({ account, profile }) {
-      if (!account || account.provider !== "discord") return false;
+    async signIn({ profile }) {
+      if (!profile?.id) return false;
 
       const Profile = profile as {
         id: string;
@@ -113,15 +114,12 @@ export const AuthOptions: NextAuthOptions = {
       };
 
       try {
-        // Check if user is in your guild
-        const guilds = await fetch("https://discord.com/api/users/@me/guilds", {
-          headers: { Authorization: `Bearer ${account.access_token}` },
-        }).then((res) => res.json());
-
-        const inGuild = guilds.some((guild: { id: string }) => guild.id === GuildID);
-        if (!inGuild) return "/error?error=not_in_guild";
-
-        // Check ban
+        // UPDATED: Use bot token to check if user is in your guild
+        // This tries to fetch their member data - 404 means not in guild
+        const discord = getClient();
+        await discord.getMember(Profile.id);
+        
+        // If we get here, user is in the guild. Now check ban status.
         const ban = await prisma.ban.findFirst({
           where: {
             TargetType: "USER",
@@ -138,9 +136,21 @@ export const AuthOptions: NextAuthOptions = {
           return `/error?error=banned&reason=${ban.Reason || "Banned"}`;
         }
 
-        return true; // Added this - was missing!
+        return true;
+        
       } catch (error) {
         console.error("SignIn error:", error);
+        
+        // Handle Discord API errors specifically
+        if (isDiscordError(error)) {
+          if (error.status === 404) {
+            // 404 = User not found in your Discord server
+            return "/error?error=not_in_guild";
+          }
+          // Log other Discord errors (403 = bot lacks permissions, etc)
+          console.error(`Discord API error ${error.status}: ${error.message}`);
+        }
+        
         return false;
       }
     },
