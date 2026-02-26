@@ -60,6 +60,11 @@ model User {
   emailVerified DateTime? @map("EmailVerified")
   image         String?  @map("Image")
   
+  // ADD THESE - Discord server data cached from bot API
+  discordRoles  String[]  @default([]) @map("DiscordRoles")
+  isBooster     Boolean   @default(false) @map("IsBooster")
+  discordNickname String? @map("DiscordNickname")
+  
   MetaDatas     MetaData[]
   Bans          Ban[]
   Accounts      Account[]

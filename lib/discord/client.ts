@@ -5,8 +5,8 @@ import {
 } from 'discord-api-types/v10';
 
 const Version = '10';
-const Token = process.env.DISCORD_BOT_TOKEN;
-const GuildID = process.env.DISCORD_GUILD_ID;
+const Token = process.env.DISCORD_TOKEN;
+const GuildID = process.env.GUILD_ID;
 
 export class DiscordClient {
   private rest: REST;
@@ -80,7 +80,7 @@ export class DiscordClient {
 
 /** Create client with your Bot token */
 export function getClient() {
-  if (!Token) throw new Error('Missing DISCORD_BOT_TOKEN in .env.local');
+  if (!Token) throw new Error('Missing DISCORD_TOKEN in .env.local');
   return new DiscordClient(Token);
 }
 
