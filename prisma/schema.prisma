@@ -69,8 +69,27 @@ model User {
   Bans          Ban[]
   Accounts      Account[]
   Sessions      Session[]
+  Profile       Profile?
   
   @@map("User")
+}
+
+model Profile {
+  id         String   @id @default(cuid())
+  userId     String   @unique @map("UserID")
+  name       String   @map("Name")        // Removed ?, made required
+  age        Int?     @map("Age")
+  photos     String[] @map("Photos")
+  bio        String?  @map("Bio")
+  tags       String[] @map("Tags")
+  verified   Boolean  @default(false) @map("Verified")
+  region     String?  @map("Region")
+  isVisible  Boolean  @default(true) @map("IsVisible")
+  lastActive DateTime @default(now()) @map("LastActive")  // Added this
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("Profile")
 }
 
 model IPAddress {

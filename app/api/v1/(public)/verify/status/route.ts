@@ -1,4 +1,3 @@
-// app/api/v1/verify/status/route.ts
 import prisma from "@/database"
 import { auth } from "@/auth"
 import { NextResponse } from "next/server"
