@@ -1,4 +1,5 @@
 import { ContainerBuilder, MessageFlags, PermissionsBitField, TextDisplayBuilder } from 'discord.js'
+import { APICall } from '../../utils/signedApi.js';
 
 const command = {
     name: "ban", 
@@ -67,31 +68,17 @@ const command = {
             // 2. Call API to ban IP, Device, and detect alts
             let altCount = 0;
             try {
-                const Response = await fetch(`${process.env.API_URL}/api/ban`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${process.env.API_KEY}`
-                    },
-                    body: JSON.stringify({
-                        TargetID: Target.id,
-                        TargetType: 'USER',
-                        UserID: Target.id,  // Discord ID for user lookup
-                        Reason: reason,
-                        BannedBy: message.author.id,
-                        ExpiresAt: null,  // null = permanent
-                        BanAlts: true,    // Enable alt detection
-                    })
+                const result = await APICall('/api/moderation/bans', {
+                    UserID: Target.id,
+                    Reason: reason,
+                    BannedBy: message.author.id,
+                    ExpiresAt: null,
+                    Cascade: true,
                 });
 
-                if (!Response.ok) {
-                    const errorText = await Response.text();
-                    console.error('[Ban] API error:', errorText);
-                } else {
-                    const result = await Response.json();
-                    altCount = result.altCount || 0;
-                    console.log(`[Ban] API created ${result.banCount} ban records for ${Target.id} (${altCount} alts banned)`);
-                }
+                altCount = result.altCount || result.details?.altsBanned || 0;
+                const totalBans = result.banCount || result.bansCreated || 0;
+                console.log(`[Ban] API created ${totalBans} ban records for ${Target.id} (${altCount} alts banned)`);
             } catch (apiError) {
                 console.error('[Ban] API call failed:', apiError);
             }

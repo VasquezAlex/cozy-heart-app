@@ -4,7 +4,7 @@
 import { motion } from "framer-motion"
 import { Heart, Loader2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { AuroraBackground } from "@/components/background"
+import { AuroraBackground } from "@/components/layout/background"
 import { cn } from "@/lib/utils"
 
 interface LoadingProps {

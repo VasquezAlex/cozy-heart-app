@@ -28,7 +28,7 @@ const interactionCreateEvent = {
     try {
       // 1. IS IT A SLASH COMMAND? (/ping, /ticket)
       if (interaction.isChatInputCommand()) {
-        const command = interaction.client.commands.get(interaction.commandName);
+        const command = interaction.client.slashCommands?.get(interaction.commandName);
         
         if (!command) {
           const ui = errorBox("Command Not Found", "That command isn't registered.\n> Tell staff to sync commands.");

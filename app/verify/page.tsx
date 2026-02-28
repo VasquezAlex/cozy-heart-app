@@ -13,10 +13,32 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Loading } from "@/components/ui/loading"
-import { AuroraBackground } from "@/components/background"
-import { api } from "@/lib/api/client"
-import type { VerifyResponse, VerifyStatusResponse } from "@/lib/api/types"
-import "@/auth"
+import { AuroraBackground } from "@/components/layout/background"
+
+type VerifyResponse = {
+  success: boolean
+  error?: string
+}
+
+type VerifyStatusResponse = {
+  verified: boolean
+}
+
+async function callApi<T>(method: string, path: string, body?: object): Promise<T> {
+  const response = await fetch(path, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: body ? JSON.stringify(body) : undefined,
+  })
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({ error: "Request failed" }))
+    throw new Error(errorBody.error || "Request failed")
+  }
+
+  return response.json()
+}
 
 interface ConsentState {
   device: boolean
@@ -41,7 +63,7 @@ export default function VerifyPage() {
     if (!initialized.current && status === "authenticated" && step === "loading") {
       initialized.current = true
       
-      api<VerifyStatusResponse>("GET", "/api/v1/verify/status")
+      callApi<VerifyStatusResponse>("GET", "/api/verify/status")
         .then((data) => {
           if (data.verified) {
             setStep("complete")
@@ -73,7 +95,7 @@ export default function VerifyPage() {
       const userId = session?.user?.id
       if (!userId) throw new Error("User ID not found")
       
-      const data = await api<VerifyResponse>("POST", "/api/v1/verify", {
+      const data = await callApi<VerifyResponse>("POST", "/api/verify", {
         userId,
         DeviceData: {
           canvas: canvas.toDataURL(),

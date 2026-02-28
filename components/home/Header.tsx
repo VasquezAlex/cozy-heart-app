@@ -1,7 +1,7 @@
 import { motion } from "framer-motion"
 import { Badge } from "@/components/ui/badge"
 import { Verified } from "lucide-react"
-import { ExtendedSession } from "@/lib/auth/types"
+import { ExtendedSession } from "@/lib/auth/types/session"
 import { TrustLevel, trustConfig } from "@/lib/utils/trust"
 
 interface HeaderProps {

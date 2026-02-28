@@ -1,11 +1,11 @@
-import { User, Verified, LucideIcon } from "lucide-react"
+import { User, Clock, Verified, LucideIcon } from "lucide-react"
 
 export const Roles = {
   verified: "1426055322111443004",        
   booster: "1424016449747423343",        
 } as const
 
-export type TrustLevel = "NEW" | "VERIFIED"
+export type TrustLevel = "NEW" | "PENDING" | "VERIFIED" | "SUSPICIOUS" | "BANNED"
 
 export function getTrustFromRoles(roles: string[]): TrustLevel {
   if (roles.includes(Roles.verified)) return "VERIFIED"
@@ -24,11 +24,29 @@ export const trustConfig: Record<TrustLevel, {
     icon: User, 
     label: "New Member" 
   },
+  "PENDING": {
+    color: "text-amber-400",
+    bg: "bg-amber-500/10 border-amber-500/20",
+    icon: Clock,
+    label: "Pending"
+  },
   "VERIFIED": { 
     color: "text-emerald-400", 
     bg: "bg-emerald-500/10 border-emerald-500/20", 
     icon: Verified, 
     label: "Verified" 
+  },
+  "SUSPICIOUS": {
+    color: "text-orange-400",
+    bg: "bg-orange-500/10 border-orange-500/20",
+    icon: Clock,
+    label: "Suspicious"
+  },
+  "BANNED": {
+    color: "text-red-400",
+    bg: "bg-red-500/10 border-red-500/20",
+    icon: User,
+    label: "Banned"
   }
 }
 

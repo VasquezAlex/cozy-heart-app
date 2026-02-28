@@ -1,6 +1,15 @@
 import crypto from 'crypto';
 
-const salt = process.env.SALT || 'default_salt_value';
+function getSalt(): string {
+    const value = process.env.SALT;
+    if (!value) {
+        throw new Error('Missing SALT environment variable');
+    }
+    return value;
+}
+
+const salt = getSalt();
+
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(salt).digest();
 
 export function encryptIPData(ip: string): string {
