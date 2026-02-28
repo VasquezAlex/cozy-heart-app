@@ -31,12 +31,12 @@ export function SeekingProfilesGrid({ loading, error, profiles, onOpenProfile }:
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {profiles.map((profile, i) => (
+      {profiles.map((profile, idx) => (
         <motion.div
           key={profile.id}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.05 }}
+          transition={{ delay: idx * 0.05 }}
           className="bg-zinc-950/50 border border-white/8 rounded-2xl p-4 hover:border-white/12 transition-colors cursor-pointer"
           onClick={() => onOpenProfile(profile.userId)}
         >

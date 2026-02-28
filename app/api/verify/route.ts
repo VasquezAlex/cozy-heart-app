@@ -9,16 +9,16 @@ type RoleResult = { success: boolean; error?: string };
 
 export async function POST(req: Request) {
 	try {
-		const cookieStore = await cookies();
-		const sessionToken =
-			cookieStore.get("authjs.session-token")?.value || cookieStore.get("next-auth.session-token")?.value;
+		const store = await cookies();
+		const token =
+			store.get("authjs.session-token")?.value || store.get("next-auth.session-token")?.value;
 
-		if (!sessionToken) {
+		if (!token) {
 			return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 		}
 
 		const session = await prisma.session.findFirst({
-			where: { sessionToken, expires: { gt: new Date() } },
+			where: { sessionToken: token, expires: { gt: new Date() } },
 			include: { user: true },
 		});
 
@@ -35,13 +35,13 @@ export async function POST(req: Request) {
 		}
 
 		const ipHash = hashIPData(req.headers.get("x-forwarded-for")?.split(",")[0] ?? "unknown");
-		const rawDeviceData = parsed.data.DeviceData;
-		const deviceFP = hashDeviceData(
-			Array.isArray(rawDeviceData)
-				? rawDeviceData.join("|")
-				: typeof rawDeviceData === "string"
-					? rawDeviceData
-					: JSON.stringify(rawDeviceData)
+		const deviceData = parsed.data.DeviceData;
+		const deviceHash = hashDeviceData(
+			Array.isArray(deviceData)
+				? deviceData.join("|")
+				: typeof deviceData === "string"
+					? deviceData
+					: JSON.stringify(deviceData)
 		);
 		const now = new Date();
 
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
 			prisma.ban.findFirst({
 				where: {
 					TargetType: "DEVICE",
-					TargetID: deviceFP,
+					TargetID: deviceHash,
 					RevokedAt: null,
 					OR: [{ ExpiresAt: null }, { ExpiresAt: { gt: now } }],
 				},
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
 
 		const existingMeta = await prisma.metaData.findFirst({ where: { UserID: user.id }, select: { ID: true } });
 		if (existingMeta) {
-			const roleResult = await grantDiscordRole(userId);
+			const role = await grantRole(userId);
 
 			await prisma.user.update({
 				where: { id: user.id },
@@ -89,11 +89,11 @@ export async function POST(req: Request) {
 			return NextResponse.json({
 				success: true,
 				alreadyVerified: true,
-				roleGranted: roleResult.success,
-				roleError: roleResult.error,
-				message: roleResult.success
+				roleGranted: role.success,
+				roleError: role.error,
+				message: role.success
 					? "Already verified - role granted!"
-					: `Already verified - ${roleResult.error}`,
+					: `Already verified - ${role.error}`,
 			});
 		}
 
@@ -104,8 +104,8 @@ export async function POST(req: Request) {
 				update: {},
 			}),
 			prisma.deviceFingerprint.upsert({
-				where: { Fingerprint: deviceFP },
-				create: { Fingerprint: deviceFP, Details: {} },
+				where: { Fingerprint: deviceHash },
+				create: { Fingerprint: deviceHash, Details: {} },
 				update: {},
 			}),
 		]);
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
 			? { level: "SUSPICIOUS", score: 0.3, flags: ["SHARED_DEVICE"] as string[], status: "SUSPICIOUS" }
 			: { level: "NEW", score: 0.8, flags: [] as string[], status: "VERIFIED" };
 
-		const baseExtra = sharedDevice
+		const extra = sharedDevice
 			? {
 					previousUser: sharedDevice.User?.UserID,
 					sharedDevice: true,
@@ -134,7 +134,7 @@ export async function POST(req: Request) {
 			},
 		});
 
-		const metaData = await prisma.metaData.create({
+		const meta = await prisma.metaData.create({
 			data: {
 				UserID: user.id,
 				IPID: ipRecord.ID,
@@ -142,26 +142,26 @@ export async function POST(req: Request) {
 				TrustScore: trust.score,
 				RiskFlags: trust.flags,
 				VerificationStatus: trust.status,
-				ExtraData: baseExtra,
+				ExtraData: extra,
 			},
 		});
 
-		const roleResult = await grantDiscordRole(userId);
-		const roleExtra = roleResult.success
+		const role = await grantRole(userId);
+		const roleExtra = role.success
 			? {
-					...baseExtra,
+					...extra,
 					roleGranted: true,
 					roleGrantedAt: new Date().toISOString(),
 				}
 			: {
-					...baseExtra,
+					...extra,
 					roleGranted: false,
-					roleError: roleResult.error,
+					roleError: role.error,
 					roleFailedAt: new Date().toISOString(),
 				};
 
 		await prisma.metaData.update({
-			where: { ID: metaData.ID },
+			where: { ID: meta.ID },
 			data: {
 				ExtraData: roleExtra,
 			},
@@ -169,12 +169,12 @@ export async function POST(req: Request) {
 
 		return NextResponse.json({
 			success: true,
-			roleGranted: roleResult.success,
-			roleError: roleResult.error,
+			roleGranted: role.success,
+			roleError: role.error,
 			warning: sharedDevice ? "Device previously used by another account" : undefined,
-			message: roleResult.success
+			message: role.success
 				? "Verified and role granted!"
-				: `Verified but role failed: ${roleResult.error}. Contact a mod.`,
+				: `Verified but role failed: ${role.error}. Contact a mod.`,
 		});
 	} catch (error) {
 		console.error("Verification error:", error);
@@ -182,7 +182,7 @@ export async function POST(req: Request) {
 	}
 }
 
-async function grantDiscordRole(userId: string): Promise<RoleResult> {
+async function grantRole(userId: string): Promise<RoleResult> {
 	try {
 		const roleId = process.env.VERIFIED_ROLE_ID;
 
@@ -192,8 +192,8 @@ async function grantDiscordRole(userId: string): Promise<RoleResult> {
 
 		await getClient().addRole(userId, roleId, "Cozy Heart verification flow");
 		return { success: true };
-	} catch (err) {
-		const statusCode = isDiscordError(err) ? err.status : undefined;
+	} catch (error) {
+		const status = isDiscordError(error) ? error.status : undefined;
 		const errorMap: Record<number, string> = {
 			403: "Bot lacks permission",
 			404: "User not in server",
@@ -202,7 +202,7 @@ async function grantDiscordRole(userId: string): Promise<RoleResult> {
 
 		return {
 			success: false,
-			error: errorMap[statusCode as number] || `Discord API error (${statusCode})`,
+			error: errorMap[status as number] || `Discord API error (${status})`,
 		};
 	}
 }

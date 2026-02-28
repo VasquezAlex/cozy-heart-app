@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'url';  // Add pathToFileURL
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
 
-const Directory = path.dirname(fileURLToPath(import.meta.url));
+const directory = path.dirname(fileURLToPath(import.meta.url));
 
 function getCommandFiles(dir) {
     if (!fs.existsSync(dir)) return [];
@@ -18,14 +18,14 @@ export default async function registerCommands(client) {
     client.prefixCommands = new Map();
     client.slashCommands = new Map();
 
-    const BaseDirectory = path.join(Directory, '..', 'commands');
-    const PrefixDirectory = path.join(BaseDirectory, 'prefix');
-    const SlashDirectory = path.join(BaseDirectory, 'slash');
+    const baseDirectory = path.join(directory, '..', 'commands');
+    const prefixDirectory = path.join(baseDirectory, 'prefix');
+    const slashDirectory = path.join(baseDirectory, 'slash');
 
     // Load prefix commands
-    const PrefixCommands = getCommandFiles(PrefixDirectory);
+    const prefixCommands = getCommandFiles(prefixDirectory);
 
-    for (const file of PrefixCommands) {
+    for (const file of prefixCommands) {
         try {
             // FIX HERE: Use pathToFileURL
             const { default: command } = await import(pathToFileURL(file).href);
@@ -42,10 +42,10 @@ export default async function registerCommands(client) {
     }
 
     // Load slash commands
-    const SlashCommands = getCommandFiles(SlashDirectory);
-    const SlashCommandData = [];
+    const slashCommands = getCommandFiles(slashDirectory);
+    const slashCommandData = [];
 
-    for (const file of SlashCommands) {
+    for (const file of slashCommands) {
         try {
             // FIX HERE: Use pathToFileURL
             const { default: command } = await import(pathToFileURL(file).href);
@@ -57,7 +57,7 @@ export default async function registerCommands(client) {
 
             const name = command.data.name;
             client.slashCommands.set(name, command);
-            SlashCommandData.push(command.data.toJSON());
+            slashCommandData.push(command.data.toJSON());
             console.log(`[Slash] Loaded: ${name}`);
         } catch (error) {
             console.error(`[Slash] Error loading ${file}:`, error);
@@ -65,22 +65,22 @@ export default async function registerCommands(client) {
     }
 
     // Register slash commands to Discord
-    if (SlashCommandData.length > 0) {
+    if (slashCommandData.length > 0) {
         const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
         
         try {
             if (process.env.DISCORD_GUILD_ID) {
                 await rest.put(
                     Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.DISCORD_GUILD_ID),
-                    { body: SlashCommandData }
+                    { body: slashCommandData }
                 );
-                console.log(`[Slash] Registered ${SlashCommandData.length} guild commands`);
+                console.log(`[Slash] Registered ${slashCommandData.length} guild commands`);
             } else {
                 await rest.put(
                     Routes.applicationCommands(process.env.CLIENT_ID),
-                    { body: SlashCommandData }
+                    { body: slashCommandData }
                 );
-                console.log(`[Slash] Registered ${SlashCommandData.length} global commands`);
+                console.log(`[Slash] Registered ${slashCommandData.length} global commands`);
             }
         } catch (error) {
             console.error('[Slash] Registration failed:', error);

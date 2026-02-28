@@ -173,7 +173,6 @@ function UserDropdown({ user, trustLevel, isOnline, isAdmin, onSignOut }: {
   onSignOut: () => void
 }) {
   const trustStyle = trustConfig[trustLevel]
-  const TrustIcon = trustStyle.icon
 
   return (
     <DropdownMenu>
@@ -200,7 +199,7 @@ function UserDropdown({ user, trustLevel, isOnline, isAdmin, onSignOut }: {
         <DropdownMenuLabel className="flex items-center justify-between px-2 py-2">
           <span className="text-zinc-400 text-xs uppercase tracking-wider">My Account</span>
           <Badge variant="outline" className={`${trustStyle.bg} ${trustStyle.color} border text-xs`}>
-            <TrustIcon className="w-3 h-3 mr-1" />
+            <trustStyle.icon className="w-3 h-3 mr-1" />
             {trustLevel}
           </Badge>
         </DropdownMenuLabel>

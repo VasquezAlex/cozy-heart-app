@@ -1,14 +1,14 @@
 import { User, Clock, Verified, LucideIcon } from "lucide-react"
 
-export const Roles = {
+export const roles = {
   verified: "1426055322111443004",        
   booster: "1424016449747423343",        
 } as const
 
 export type TrustLevel = "NEW" | "PENDING" | "VERIFIED" | "SUSPICIOUS" | "BANNED"
 
-export function getTrustFromRoles(roles: string[]): TrustLevel {
-  if (roles.includes(Roles.verified)) return "VERIFIED"
+export function getTrustFromRoles(userRoles: string[]): TrustLevel {
+  if (userRoles.includes(roles.verified)) return "VERIFIED"
   return "NEW"
 }
 

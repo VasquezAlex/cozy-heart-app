@@ -23,22 +23,22 @@ export default function SeekingPage() {
   useEffect(() => {
     if (status !== "authenticated") return
 
-    async function loadProfiles() {
+    async function load() {
       try {
-        const res = await fetch('/api/seeking')
-        if (!res.ok) throw new Error("Failed to load")
+        const response = await fetch('/api/seeking')
+        if (!response.ok) throw new Error("Failed to load")
         
-        const data = await res.json()
+        const data = await response.json()
         setProfiles(data.profiles || [])
-      } catch (err) {
+      } catch (error) {
         setError("Could not load profiles")
-        console.error(err)
+        console.error(error)
       } finally {
         setLoading(false)
       }
     }
 
-    loadProfiles()
+    load()
   }, [status])
 
   useEffect(() => {

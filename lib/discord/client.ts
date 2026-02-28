@@ -57,7 +57,7 @@ export class DiscordClient {
    *
    * @example
    * const member = await client.getMember('123');
-   * const isVerified = member.roles.includes(verifiedRoleId);
+  * const isVerified = member.roles.includes(verifiedRole);
    */
   async getMember(userId: string): Promise<APIGuildMember> {
     return this.rest.get(
@@ -157,7 +157,7 @@ export class DiscordClient {
     * @throws Discord API error on missing permissions or invalid payload.
     *
     * @example
-    * await client.updateMember(userId, { roles: [verifiedRoleId] });
+    * await client.updateMember(userId, { roles: [verifiedRole] });
    */
   async updateMember(userId: string, changes: { nick?: string; roles?: string[] }) {
     return this.rest.patch(

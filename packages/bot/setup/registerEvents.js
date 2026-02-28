@@ -2,21 +2,21 @@ import fs from 'fs';
 import path from 'path';
 import { pathToFileURL, fileURLToPath } from 'url';
 
-const Directory = path.dirname(fileURLToPath(import.meta.url));
+const directory = path.dirname(fileURLToPath(import.meta.url));
 
 async function registerEvents(client) {
-    const EventsDirectory = path.join(Directory, '..', 'events');
+    const eventsDirectory = path.join(directory, '..', 'events');
 
-    if (!fs.existsSync(EventsDirectory)) {
-        console.warn(`Events directory not found at ${EventsDirectory}`);
+    if (!fs.existsSync(eventsDirectory)) {
+        console.warn(`Events directory not found at ${eventsDirectory}`);
         return;
     }
 
-    const eventFiles = fs.readdirSync(EventsDirectory).filter(file => file.endsWith('.js'));
+    const eventFiles = fs.readdirSync(eventsDirectory).filter(file => file.endsWith('.js'));
 
     for (const file of eventFiles) {
         try {
-            const filePath = path.join(EventsDirectory, file);
+            const filePath = path.join(eventsDirectory, file);
             const { default: event } = await import(pathToFileURL(filePath).href);
 
             if (!event.name || !event.execute) {

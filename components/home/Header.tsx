@@ -13,7 +13,6 @@ interface HeaderProps {
 
 export function Header({ user, stats, trustLevel, isVerified }: HeaderProps) {
   const trustStyle = trustConfig[trustLevel]
-  const TrustIcon = trustStyle.icon
 
   return (
     <motion.section 
@@ -26,7 +25,7 @@ export function Header({ user, stats, trustLevel, isVerified }: HeaderProps) {
           variant="outline" 
           className={`${trustStyle.bg} ${trustStyle.color} border backdrop-blur-sm px-3 py-1.5 text-xs font-semibold uppercase tracking-wide`}
         >
-          <TrustIcon className="w-3.5 h-3.5 mr-1.5" />
+          <trustStyle.icon className="w-3.5 h-3.5 mr-1.5" />
           {trustStyle.label}
         </Badge>
         

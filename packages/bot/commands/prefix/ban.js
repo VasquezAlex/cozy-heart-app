@@ -10,10 +10,10 @@ const command = {
     async execute(message, args) {
         if (!message.guild) return;
 
-        const Target = message.mentions.members?.first() || message.guild.members.cache.get(args[0]);
-        const Moderator = message.guild.roles.cache.find(role => role.name.toLowerCase() === 'cozy team');
+        const target = message.mentions.members?.first() || message.guild.members.cache.get(args[0]);
+        const moderator = message.guild.roles.cache.find(role => role.name.toLowerCase() === 'cozy team');
 
-        if (!Target) {
+        if (!target) {
             return message.reply({
                 components: [
                     new ContainerBuilder()
@@ -26,7 +26,7 @@ const command = {
             });
         }
 
-        if (!message.member?.roles.cache.has(Moderator?.id || '') && !message.member?.permissions.has(PermissionsBitField.Flags.BanMembers)) {
+        if (!message.member?.roles.cache.has(moderator?.id || '') && !message.member?.permissions.has(PermissionsBitField.Flags.BanMembers)) {
             return message.reply({
                 components: [
                     new ContainerBuilder()
@@ -37,7 +37,7 @@ const command = {
             });
         }
 
-        if (Target.id === message.author.id) {
+        if (target.id === message.author.id) {
             return message.reply({
                 components: [
                     new ContainerBuilder()
@@ -48,7 +48,7 @@ const command = {
             });
         }
 
-        if (!Target.bannable) {
+        if (!target.bannable) {
             return message.reply({
                 components: [
                     new ContainerBuilder()
@@ -63,13 +63,13 @@ const command = {
 
         try {
             // 1. Ban the main target on Discord first
-            await Target.ban({ reason });
+            await target.ban({ reason });
 
             // 2. Call API to ban IP, Device, and detect alts
             let altCount = 0;
             try {
                 const result = await APICall('/api/moderation/bans', {
-                    UserID: Target.id,
+                    UserID: target.id,
                     Reason: reason,
                     BannedBy: message.author.id,
                     ExpiresAt: null,
@@ -78,15 +78,15 @@ const command = {
 
                 altCount = result.altCount || result.details?.altsBanned || 0;
                 const totalBans = result.banCount || result.bansCreated || 0;
-                console.log(`[Ban] API created ${totalBans} ban records for ${Target.id} (${altCount} alts banned)`);
+                console.log(`[Ban] API created ${totalBans} ban records for ${target.id} (${altCount} alts banned)`);
             } catch (apiError) {
                 console.error('[Ban] API call failed:', apiError);
             }
 
             // 3. Build success message
             const successMessage = altCount > 0 
-                ? `Banned **${Target.user.tag}** | ${reason}\n> IP, Device fingerprint, and **${altCount} alt account(s)** blacklisted.`
-                : `Banned **${Target.user.tag}** | ${reason}\n> IP & Device fingerprint blacklisted.`;
+                ? `Banned **${target.user.tag}** | ${reason}\n> IP, Device fingerprint, and **${altCount} alt account(s)** blacklisted.`
+                : `Banned **${target.user.tag}** | ${reason}\n> IP & Device fingerprint blacklisted.`;
 
             return message.reply({
                 components: [

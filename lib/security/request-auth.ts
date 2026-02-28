@@ -2,9 +2,9 @@ import { NextResponse } from "next/server"
 import crypto from "crypto"
 
 const requests = new Map<string, number[]>()
-const MAX_STORED_IPS = 1000
+const maxStoredIps = 1000
 
-export function authenticateRequest(req: Request) {
+export function authenticate(req: Request) {
   if (!req?.headers) {
     throw new Error("Invalid request object")
   }
@@ -38,7 +38,7 @@ function isRateLimited(ip: string) {
   recent.push(now)
   requests.set(ip, recent)
 
-  if (requests.size > MAX_STORED_IPS) {
+  if (requests.size > maxStoredIps) {
     const firstKey = requests.keys().next().value
     if (firstKey) {
       requests.delete(firstKey)

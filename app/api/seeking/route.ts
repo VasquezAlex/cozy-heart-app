@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
-import { getAuthSession } from "@/lib/auth/session"
+import { getSession } from "@/lib/auth/session"
 import { rateLimit } from "@/lib/security/rate-limit"
 import { validate, seekingSchema } from "@/lib/security/validation"
-import { updateUserActivity } from "@/lib/db/user"
+import { touchUser } from "@/lib/db/user"
 import { prisma } from "@/lib/db/client"
 import type { ExtendedSession } from "@/lib/auth/types"
 
@@ -11,7 +11,7 @@ function parseAge(value: string | null, fallback: number) {
   return Number.isNaN(parsed) ? fallback : parsed
 }
 
-function getSeekingFilters(req: Request) {
+function getFilters(req: Request) {
   const { searchParams } = new URL(req.url)
   const minAge = parseAge(searchParams.get("min"), 18)
   const maxAge = parseAge(searchParams.get("max"), 99)
@@ -29,12 +29,12 @@ function getSeekingFilters(req: Request) {
 
 export async function GET(req: Request) {
   try {
-    const session = await getAuthSession()
+    const session = await getSession()
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    const filters = getSeekingFilters(req)
+    const filters = getFilters(req)
 
     const profiles = await prisma.profile.findMany({
       where: {
@@ -64,14 +64,14 @@ export async function GET(req: Request) {
       orderBy: { lastActive: "desc" },
     })
 
-    const seekingProfiles = profiles.map((profile) => ({
+    const items = profiles.map((profile) => ({
       ...profile,
       complete: (profile.photos?.length || 0) > 0 && !!profile.bio && profile.tags.length > 0,
     }))
 
     return NextResponse.json({
-      profiles: seekingProfiles,
-      count: seekingProfiles.length,
+      profiles: items,
+      count: items.length,
     })
   } catch (error) {
     console.error("Seeking GET error:", error)
@@ -81,7 +81,7 @@ export async function GET(req: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getAuthSession()
+    const session = await getSession()
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
@@ -92,22 +92,22 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const validation = validate(seekingSchema, body)
-    if (!validation.success) {
-      return NextResponse.json({ error: validation.error }, { status: 400 })
+    const parsed = validate(seekingSchema, body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 })
     }
 
-    const extendedSession = session as ExtendedSession
-    if (!extendedSession.can?.like) {
+    const s = session as ExtendedSession
+    if (!s.can?.like) {
       return NextResponse.json({ error: "Account verification required" }, { status: 403 })
     }
 
-    await updateUserActivity(session.user.id)
+    await touchUser(session.user.id)
 
     return NextResponse.json({
       success: true,
-      action: validation.data.action,
-      targetId: validation.data.targetId,
+      action: parsed.data.action,
+      targetId: parsed.data.targetId,
     })
   } catch (error) {
     console.error("Seeking error:", error)

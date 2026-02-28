@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/client"
 
-export async function getActiveUserBan(targetId: string) {
+export async function getUserBan(targetId: string) {
   const now = new Date()
 
   return prisma.ban.findFirst({

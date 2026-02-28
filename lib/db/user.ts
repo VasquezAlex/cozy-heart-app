@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/client"
 
-export async function getUserById(id: string) {
+export async function getUser(id: string) {
   return prisma.user.findUnique({
     where: { id },
     select: {
@@ -13,7 +13,7 @@ export async function getUserById(id: string) {
   })
 }
 
-export async function updateUserActivity(id: string) {
+export async function touchUser(id: string) {
   return prisma.user.update({
     where: { id },
     data: { LastActive: new Date() },

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { Prisma } from "@prisma/client";
-import { authenticateRequest as authenticate, deny } from "@/lib/security/request-auth";
+import { authenticate, deny } from "@/lib/security/request-auth";
 
 export async function GET(req: Request) {
   try {
-    const auth = authenticate(req);
+    const ctx = authenticate(req);
 
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "100", 10);
@@ -28,46 +28,46 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       success: true,
-      requestId: auth.requestId,
+      requestId: ctx.requestId,
       count: bans.length,
       bans,
     });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     return deny(message);
   }
 }
 
 export async function POST(req: Request) {
-  let auth;
+  let ctx;
 
   try {
-    auth = authenticate(req);
+    ctx = authenticate(req);
     const body = await req.json();
     const {
-      UserID: rawUserID,
-      TargetID,
-      Reason,
-      BannedBy,
-      ExpiresAt,
-      Cascade: rawCascade,
-      BanAlts,
+      UserID: userIdInput,
+      TargetID: targetIdInput,
+      Reason: reasonInput,
+      BannedBy: bannedByInput,
+      ExpiresAt: expiresAtInput,
+      Cascade: cascadeInput,
+      BanAlts: banAltsInput,
     } = body;
 
-    const UserID = rawUserID || TargetID;
-    const Cascade =
-      typeof rawCascade === "boolean"
-        ? rawCascade
-        : typeof BanAlts === "boolean"
-          ? BanAlts
+    const userId = userIdInput || targetIdInput;
+    const cascade =
+      typeof cascadeInput === "boolean"
+        ? cascadeInput
+        : typeof banAltsInput === "boolean"
+          ? banAltsInput
           : true;
 
-    if (!UserID) {
+    if (!userId) {
       return NextResponse.json({ error: "UserID required" }, { status: 400 });
     }
 
     const user = await prisma.user.findUnique({
-      where: { UserID },
+      where: { UserID: userId },
       include: {
         MetaDatas: {
           orderBy: { LastSeenAt: "desc" },
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
     const existing = await prisma.ban.findFirst({
       where: {
         TargetType: "USER",
-        TargetID: UserID,
+        TargetID: userId,
         RevokedAt: null,
         OR: [{ ExpiresAt: null }, { ExpiresAt: { gt: new Date() } }],
       },
@@ -97,47 +97,47 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "User already banned" }, { status: 409 });
     }
 
-    const latestMeta = user.MetaDatas[0];
+    const meta = user.MetaDatas[0];
     const now = new Date();
-    const bannedAlts = new Set<string>();
-    const createdBans = [];
+    const altIds = new Set<string>();
+    const bans = [];
 
     const mainBan = await prisma.ban.create({
       data: {
         TargetType: "USER",
-        TargetID: UserID,
+        TargetID: userId,
         UserID: user.id,
-        Reason: Reason || "No reason provided",
-        BannedBy: BannedBy || "system",
+        Reason: reasonInput || "No reason provided",
+        BannedBy: bannedByInput || "system",
         CreatedAt: now,
-        ExpiresAt: ExpiresAt ? new Date(ExpiresAt) : null,
+        ExpiresAt: expiresAtInput ? new Date(expiresAtInput) : null,
         Details: {
           previousTrustLevel: user.TrustLevel,
-          ipAtTimeOfBan: latestMeta?.IPAddress?.IPHash,
-          deviceAtTimeOfBan: latestMeta?.DeviceFingerprint?.Fingerprint,
+          ipAtTimeOfBan: meta?.IPAddress?.IPHash,
+          deviceAtTimeOfBan: meta?.DeviceFingerprint?.Fingerprint,
         },
       },
     });
-    createdBans.push(mainBan);
+    bans.push(mainBan);
 
-    if (Cascade && latestMeta) {
-      if (latestMeta.IPAddress) {
-        const IPBan = await prisma.ban.create({
+    if (cascade && meta) {
+      if (meta.IPAddress) {
+        const ipBan = await prisma.ban.create({
           data: {
             TargetType: "IP",
-            TargetID: latestMeta.IPAddress.IPHash,
-            Reason: `Cascade from user ${UserID}: ${Reason || "No reason"}`,
-            BannedBy: BannedBy || "system",
+            TargetID: meta.IPAddress.IPHash,
+            Reason: `Cascade from user ${userId}: ${reasonInput || "No reason"}`,
+            BannedBy: bannedByInput || "system",
             CreatedAt: now,
-            ExpiresAt: ExpiresAt ? new Date(ExpiresAt) : null,
-            Details: { sourceUserId: UserID },
+            ExpiresAt: expiresAtInput ? new Date(expiresAtInput) : null,
+            Details: { sourceUserId: userId },
           },
         });
-        createdBans.push(IPBan);
+        bans.push(ipBan);
 
         const altsByIP = await prisma.metaData.findMany({
           where: {
-            IPID: latestMeta.IPID,
+            IPID: meta.IPID,
             UserID: { not: user.id },
             IsBlocked: false,
           },
@@ -146,22 +146,22 @@ export async function POST(req: Request) {
         });
 
         for (const alt of altsByIP) {
-          if (!bannedAlts.has(alt.UserID) && alt.User.UserID) {
-            bannedAlts.add(alt.UserID);
+          if (!altIds.has(alt.UserID) && alt.User.UserID) {
+            altIds.add(alt.UserID);
 
             const altBan = await prisma.ban.create({
               data: {
                 TargetType: "USER",
                 TargetID: alt.User.UserID,
                 UserID: alt.UserID,
-                Reason: `Alt account (shared IP with ${UserID}): ${Reason || "No reason"}`,
-                BannedBy: BannedBy || "system",
+                Reason: `Alt account (shared IP with ${userId}): ${reasonInput || "No reason"}`,
+                BannedBy: bannedByInput || "system",
                 CreatedAt: now,
-                ExpiresAt: ExpiresAt ? new Date(ExpiresAt) : null,
-                Details: { isAlt: true, linkedTo: UserID, method: "IP_MATCH" },
+                ExpiresAt: expiresAtInput ? new Date(expiresAtInput) : null,
+                Details: { isAlt: true, linkedTo: userId, method: "IP_MATCH" },
               },
             });
-            createdBans.push(altBan);
+            bans.push(altBan);
 
             await prisma.user.update({
               where: { id: alt.UserID },
@@ -171,26 +171,26 @@ export async function POST(req: Request) {
         }
       }
 
-      if (latestMeta.DeviceFingerprint) {
+      if (meta.DeviceFingerprint) {
         const deviceBan = await prisma.ban.create({
           data: {
             TargetType: "DEVICE",
-            TargetID: latestMeta.DeviceFingerprint.Fingerprint,
-            Reason: `Cascade from user ${UserID}: ${Reason || "No reason"}`,
-            BannedBy: BannedBy || "system",
+            TargetID: meta.DeviceFingerprint.Fingerprint,
+            Reason: `Cascade from user ${userId}: ${reasonInput || "No reason"}`,
+            BannedBy: bannedByInput || "system",
             CreatedAt: now,
-            ExpiresAt: ExpiresAt ? new Date(ExpiresAt) : null,
-            Details: { sourceUserId: UserID },
+            ExpiresAt: expiresAtInput ? new Date(expiresAtInput) : null,
+            Details: { sourceUserId: userId },
           },
         });
-        createdBans.push(deviceBan);
+        bans.push(deviceBan);
 
         const altsByDevice = await prisma.metaData.findMany({
           where: {
-            DeviceID: latestMeta.DeviceID,
+            DeviceID: meta.DeviceID,
             UserID: {
               not: user.id,
-              notIn: Array.from(bannedAlts),
+              notIn: Array.from(altIds),
             },
             IsBlocked: false,
           },
@@ -199,22 +199,22 @@ export async function POST(req: Request) {
         });
 
         for (const alt of altsByDevice) {
-          if (!bannedAlts.has(alt.UserID) && alt.User.UserID) {
-            bannedAlts.add(alt.UserID);
+          if (!altIds.has(alt.UserID) && alt.User.UserID) {
+            altIds.add(alt.UserID);
 
             const altBan = await prisma.ban.create({
               data: {
                 TargetType: "USER",
                 TargetID: alt.User.UserID,
                 UserID: alt.UserID,
-                Reason: `Alt account (shared device with ${UserID}): ${Reason || "No reason"}`,
-                BannedBy: BannedBy || "system",
+                Reason: `Alt account (shared device with ${userId}): ${reasonInput || "No reason"}`,
+                BannedBy: bannedByInput || "system",
                 CreatedAt: now,
-                ExpiresAt: ExpiresAt ? new Date(ExpiresAt) : null,
-                Details: { isAlt: true, linkedTo: UserID, method: "DEVICE_MATCH" },
+                ExpiresAt: expiresAtInput ? new Date(expiresAtInput) : null,
+                Details: { isAlt: true, linkedTo: userId, method: "DEVICE_MATCH" },
               },
             });
-            createdBans.push(altBan);
+            bans.push(altBan);
 
             await prisma.user.update({
               where: { id: alt.UserID },
@@ -226,35 +226,35 @@ export async function POST(req: Request) {
     }
 
     await prisma.user.update({
-      where: { UserID },
+      where: { UserID: userId },
       data: { TrustLevel: "BANNED" },
     });
 
     return NextResponse.json({
       success: true,
-      requestId: auth.requestId,
-      message: `User ${UserID} banned successfully`,
-      bansCreated: createdBans.length,
-      banCount: createdBans.length,
-      altCount: bannedAlts.size,
+      requestId: ctx.requestId,
+      message: `User ${userId} banned successfully`,
+      bansCreated: bans.length,
+      banCount: bans.length,
+      altCount: altIds.size,
       details: {
         mainBanId: mainBan.ID,
-        altsBanned: bannedAlts.size,
-        ipBanned: !!latestMeta?.IPAddress && Cascade,
-        deviceBanned: !!latestMeta?.DeviceFingerprint && Cascade,
+        altsBanned: altIds.size,
+        ipBanned: !!meta?.IPAddress && cascade,
+        deviceBanned: !!meta?.DeviceFingerprint && cascade,
       },
     });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     if (
       ["IP not allowed", "Too many requests", "Request too old", "Wrong API key", "Invalid signature"].includes(
         message
       )
     ) {
-      return deny(message, auth?.requestId);
+      return deny(message, ctx?.requestId);
     }
 
-    console.error(`[Ban Error][${auth?.requestId}]`, err);
-    return NextResponse.json({ error: "Internal error", requestId: auth?.requestId }, { status: 500 });
+    console.error(`[Ban Error][${ctx?.requestId}]`, error);
+    return NextResponse.json({ error: "Internal error", requestId: ctx?.requestId }, { status: 500 });
   }
 }
